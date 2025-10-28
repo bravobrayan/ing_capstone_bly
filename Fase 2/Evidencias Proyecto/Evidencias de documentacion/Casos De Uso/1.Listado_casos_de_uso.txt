@@ -1,0 +1,17 @@
+Registra usuario
+Inicio sesion
+R1 Perfil usuario trabajador (oficios, )-no se verifica tarifa ni disponibilidad en el usuario porque es como uber el se conecta y verifica si quiere 
+el trabajo en la fecha indicada o no
+
+R2 Perfil empleador con historial de trabajos
+R3 Publicar trabajo con categoría, descripción y ubicación
+R4 Listar trabajos con filtros
+R5 Cambiar estado de trabajo (nuevo, asignado, finalizado)
+R6 Ranking de candidatos
+R7 Aceptación/rechazo de ofertas
+R8 Chat en tiempo real
+R9 Reseñas y calificaciones
+
+
+
+flujo de proceso
