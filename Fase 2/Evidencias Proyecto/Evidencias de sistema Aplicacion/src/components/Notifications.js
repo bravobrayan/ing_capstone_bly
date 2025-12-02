@@ -1,121 +1,66 @@
-import React, { useState, useEffect } from 'react'  
-import { motion } from 'framer-motion'  
-import { supabase } from '../supabaseClient'  
-import { Bell } from 'lucide-react'  
-import BottomNav from './BottomNav'  
+import React, { useEffect, useState } from "react";
+import { supabase } from "../supabaseClient";
+import BottomNav from "./BottomNav";
 
-const Notifications = () => {  
-  const [notifications, setNotifications] = useState([])  
-  const [currentUserId, setCurrentUserId] = useState(null)  
-  const [channel, setChannel] = useState(null)  
+export default function Notifications() {
+  const [session, setSession] = useState(null);
+  const [rows, setRows] = useState([]);
 
-  const fetchNotifications = async (userId) => {  
-    if (!userId) return  
-    const { data, error } = await supabase  
-      .from('notifications')  
-      .select('*')  
-      .eq('user_id', userId)  
-      .order('created_at', { ascending: false })  
-    if (error) {  
-      console.error(error)  
-    } else {  
-      setNotifications(data || [])  
-    }  
-  }  
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+  }, []);
 
-  // Cargar user y notificaciones iniciales  
-  useEffect(() => {  
-    const initUser = async () => {  
-      const { data: { user } } = await supabase.auth.getUser()  
-      if (user) {  
-        setCurrentUserId(user.id)  
-        fetchNotifications(user.id)  
-      }  
-    }  
-    initUser()  
-  }, [])  
+  const fetchAll = async (uid) => {
+    const { data } = await supabase
+      .from("notifications")
+      .select("id, title, message, is_read, created_at, metadata")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
+    setRows(data || []);
+  };
 
-  // Configurar suscripción real-time solo después de tener userId  
-  useEffect(() => {  
-    if (!currentUserId) return  
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetchAll(session.user.id);
 
-    const subscription = supabase  
-      .channel('notifications')  
-      .on(  
-        'postgres_changes',  
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` },  
-        (payload) => {  
-          fetchNotifications(currentUserId)  
-        }  
-      )  
-      .subscribe((status, err) => {  
-        if (status === 'SUBSCRIBED') {  
-          setChannel(subscription)  
-        } else if (err) {  
-          console.error('Error en suscripción:', err)  
-        }  
-      })  
+    const ch = supabase
+      .channel("notif-rt")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${session.user.id}` }, () => fetchAll(session.user.id))
+      .subscribe();
 
-    // Cleanup: remover canal al desmontar  
-    return () => {  
-      if (subscription) {  
-        supabase.removeChannel(subscription)  
-      }  
-    }  
-  }, [currentUserId])  
+    return () => { supabase.removeChannel(ch); };
+  }, [session?.user?.id]);
 
-  // Recargar notificaciones si cambia userId  
-  useEffect(() => {  
-    if (currentUserId) {  
-      fetchNotifications(currentUserId)  
-    }  
-  }, [currentUserId])  
+  const markRead = async (id) => {
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    setRows(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+  };
 
-  const markAsRead = async (id) => {  
-    const { error } = await supabase  
-      .from('notifications')  
-      .update({ is_read: true })  
-      .eq('id', id)  
-
-    if (!error) {  
-      setNotifications(prev =>  
-        prev.map(notif =>  
-          notif.id === id ? { ...notif, is_read: true } : notif  
-        )  
-      )  
-    }  
-  }  
-
-  return (  
-    <div className="min-h-screen bg-purple-50 p-4 max-w-md mx-auto pt-4 pb-20">  
-      <motion.div className="bg-white rounded-3xl p-6 shadow-xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>  
-        <div className="flex items-center gap-3 mb-6">  
-          <Bell className="w-6 h-6 text-purple-600" />  
-          <h1 className="text-2xl font-bold text-gray-800">Notificaciones</h1>  
-        </div>  
-        <div className="space-y-4">  
-          {notifications.map((notif) => (  
-            <motion.div  
-              key={notif.id}  
-              className={`p-4 rounded-2xl border cursor-pointer ${  
-                notif.is_read ? 'border-gray-200 bg-gray-50' : 'border-purple-200 bg-purple-50'  
-              }`}  
-              onClick={() => markAsRead(notif.id)}  
-              whileTap={{ scale: 0.98 }}  
-            >  
-              <h3 className="font-semibold text-gray-800">{notif.title}</h3>  
-              <p className="text-sm text-gray-600">{notif.message}</p>  
-              <p className="text-xs text-gray-500 mt-2">{new Date(notif.created_at).toLocaleString()}</p>  
-            </motion.div>  
-          ))}  
-          {notifications.length === 0 && (  
-            <p className="text-center text-gray-500 py-8">No hay notificaciones nuevas.</p>  
-          )}  
-        </div>  
-      </motion.div>  
-      <BottomNav />  
-    </div>  
-  )  
-}  
-
-export default Notifications
+  return (
+    <div className="min-h-screen bg-purple-50 p-4 max-w-md mx-auto pb-20">
+      <div className="bg-white rounded-3xl p-5 shadow-xl">
+        <h1 className="text-lg font-bold mb-4">Notificaciones</h1>
+        <div className="space-y-3">
+          {rows.map(n => (
+            <div key={n.id} className={`rounded-2xl border p-3 ${n.is_read ? "bg-white border-gray-100" : "bg-purple-50 border-purple-100"}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-semibold text-sm">{n.title}</p>
+                  <p className="text-sm text-gray-700 mt-1">{n.message}</p>
+                  <p className="text-xs text-gray-500 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                </div>
+                {!n.is_read && (
+                  <button onClick={() => markRead(n.id)} className="text-xs bg-purple-600 text-white px-2 py-1 rounded-lg">
+                    Marcar leído
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {!rows.length && <p className="text-sm text-gray-500">No hay notificaciones aún.</p>}
+        </div>
+      </div>
+      <BottomNav />
+    </div>
+  );
+}

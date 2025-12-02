@@ -1,466 +1,389 @@
-import React, { useState, useEffect } from 'react';  
-import { motion } from 'framer-motion';  
-import { supabase } from '../supabaseClient';  
-import { useNavigate, useParams } from 'react-router-dom';  
-import { Edit, Star, Clock, Building, Phone, Mail } from 'lucide-react';  
-import BottomNav from './BottomNav';  
+// components/Profile.js
+import React, { useEffect, useRef, useState } from "react";
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import BottomNav from "./BottomNav";
 
-const Profile = () => {  
-  const navigate = useNavigate();  
-  const { action, userId } = useParams(); // action: 'create', 'edit', 'view'; userId for other users  
-  const isCreate = action === 'create';  
-  const isEdit = action === 'edit';  
-  const isView = action === 'view';  
-  const [session, setSession] = useState(null);  
-  const [profile, setProfile] = useState(null);  
-  const [loading, setLoading] = useState(true);  
-  const [errorMsg, setErrorMsg] = useState('');  
-  const [name, setName] = useState('');  
-  const [lastname, setLastname] = useState('');  
-  const [age, setAge] = useState('');  
-  const [skills, setSkills] = useState([]);  
-  const [bio, setBio] = useState('');  
-  const [city, setCity] = useState('');  
-  const [commune, setCommune] = useState('');  
-  const [phone, setPhone] = useState('');  
-  const [photoFile, setPhotoFile] = useState(null);  
-  const [portfolio, setPortfolio] = useState(['', '', '']);  
-  const [availability, setAvailability] = useState('');  
-  const [bioCount, setBioCount] = useState(0);  
-  const [ciudades, setCiudades] = useState([]);  
-  const [comunas, setComunas] = useState([]);  
-  const [oficios, setOficios] = useState(['Plomería', 'Jardinería', 'Limpieza', 'Soporte TI', 'Construcción', 'Cocina', 'Cuidado Niños', 'Educación', 'Tutorías', 'Mantenimiento']);  
-  const [selectedOficios, setSelectedOficios] = useState([]);  
-  const [jobs, setJobs] = useState([]);  
+const CITIES = [
+  "Santiago", "Puente Alto", "Maipú", "Ñuñoa", "Providencia", "Las Condes",
+  "La Florida", "Macul", "Estación Central", "San Miguel", "Vitacura",
+];
 
-  const currentUserId = session?.user?.id;  
-  const isOwnProfile = !userId || userId === currentUserId;  
+const COMMUNES = [
+  "Santiago", "Puente Alto Centro", "Maipú", "Ñuñoa", "Providencia",
+  "Las Condes", "La Florida", "Macul", "Estación Central", "San Miguel",
+  "Vitacura",
+];
 
-  // Get session
-  useEffect(() => {  
-    const getSession = async () => {  
-      const { data: { session } } = await supabase.auth.getSession();  
-      setSession(session);  
-      if (!session && !isView) navigate('/login');  
-    };  
-    getSession();  
-  }, [navigate]);  
+export default function Profile() {
+  const navigate = useNavigate();
+  const fileRef = useRef(null);
 
-  // Load profile data
-  useEffect(() => {  
-    if (!session) return;  
-    const loadProfile = async () => {  
-      const id = userId || currentUserId;  
-      if (!id) return;  
-      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', id).single();  
-      if (error && error.code !== 'PGRST116') {  
-        setErrorMsg('Error cargando perfil.');  
-        return;  
-      }  
-      if (data) {  
-        setProfile(data);  
-        setName(data.name || '');  
-        setLastname(data.lastname || '');  
-        setAge(data.age || '');  
-        setSelectedOficios(data.skills || []);  
-        setBio(data.bio || '');  
-        setBioCount(data.bio ? data.bio.length : 0);  
-        setCity(data.city || '');  
-        setCommune(data.commune || '');  
-        setPhone(data.phone || '');  
-        setPortfolio(data.portfolio || ['', '', '']);  
-        setAvailability(data.availability || '');  
-        setLoading(false);  
-      } else {  
-        setLoading(false);  
-        if (isOwnProfile) setProfile({}); // Empty for create/edit  
-      }  
-    };  
-    loadProfile();  
-  }, [session, userId, currentUserId, isOwnProfile]);  
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  // Load jobs for profile (published/realized)
-  useEffect(() => {  
-    if (!profile?.user_id) return;  
-    const loadJobs = async () => {  
-      const { data, error } = await supabase.from('jobs').select('*').eq('user_id', profile.user_id).eq('status', 'active').limit(3);  
-      if (error) console.error('Jobs error:', error);  
-      setJobs(data || []);  
-    };  
-    loadJobs();  
-  }, [profile?.user_id]);  
+  // modo lectura / edición
+  const [editMode, setEditMode] = useState(false);
 
-  // Bio count
-  useEffect(() => {  
-    setBioCount(bio.length);  
-  }, [bio]);  
+  // Datos cargados desde BD (para vista)
+  const [profileRow, setProfileRow] = useState(null);
 
-  // Comunas dependent
-  useEffect(() => {  
-    if (city) {  
-      const comunasData = {  
-        Santiago: ['Providencia', 'Ñuñoa', 'Las Condes', 'La Reina', 'Vitacura', 'Independencia', 'Recoleta', 'Macul', 'Santiago Centro'],  
-        'Puente Alto': ['Puente Alto Centro', 'Las Vizcachas'],  
-        Maipú: ['Maipú Centro', 'El Abrazo', 'Ciudad Satélite'],  
-        'La Florida': ['Trinidad', 'Vicuña Mackenna', 'Los Quillayes'],  
-        'San Bernardo': ['San Bernardo Centro', 'Lo Herrera'],  
-        Talagante: ['Peñaflor', 'El Monte'],  
-        Melipilla: ['Melipilla Centro', 'Pomaire']  
-      };  
-      setComunas(comunasData[city] || []);  
-      if (!comunas.includes(commune)) setCommune('');  
-    } else {  
-      setComunas([]);  
-    }  
-  }, [city, commune]);  
+  // Campos editables
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [name, setName] = useState("");
+  const [lastname, setLastname] = useState("");
+  const [age, setAge] = useState("");
+  const [bio, setBio] = useState("");
+  const [city, setCity] = useState("");
+  const [commune, setCommune] = useState("");
+  const [phone, setPhone] = useState("");
+  const [availability, setAvailability] = useState("");
 
-  // Photo upload
-  const uploadPhoto = async (file) => {  
-    if (!file) return;  
-    const fileName = `${userId}_${Date.now()}.jpg`;  
-    const { data, error } = await supabase.storage.from('avatars').upload(fileName, file);  
-    if (error) {  
-      setErrorMsg('Error subiendo foto.');  
-      return null;  
-    }  
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);  
-    return publicUrl;  
-  };  
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setSession(session);
 
-  // Save profile  
-  const handleSave = async () => {  
-    setErrorMsg('');  
+      // Trae el perfil por user_id (canónico)
+      const uid = session.user.id;
+      const { data: p, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
 
-    if (!name || !lastname || !age || selectedOficios.length === 0 || !bio || !city || !commune || !phone) {  
-      setErrorMsg('Completa todos los campos obligatorios. Edad mínima 18.');  
-      return;  
-    }  
+      if (error) {
+        console.error(error);
+      }
 
-    if (parseInt(age) < 18) {  
-      setErrorMsg('Edad mínima 18 años.');  
-      return;  
-    }  
+      if (!p) {
+        // No tienes perfil -> te llevo a crear
+        navigate("/profile/create", { replace: true });
+        return;
+      }
 
-    if (bio.length > 300) {  
-      setErrorMsg('Biografía máxima 300 caracteres.');  
-      return;  
-    }  
+      setProfileRow(p);
+      // precarga campos para edición
+      setPhotoUrl(p.photo_url || p.avatar_url || "");
+      setName(p.name || "");
+      setLastname(p.lastname || "");
+      setAge(p.age ? String(p.age) : "");
+      setBio(p.bio || "");
+      setCity(p.city || "");
+      setCommune(p.commune || "");
+      setPhone(p.phone || "");
+      setAvailability(p.availability || "");
 
-    if (!phone.match(/^\+56\s?9\s?\d{8}$/)) {  
-      setErrorMsg('Teléfono formato inválido (ej. +56 9 12345678).');  
-      return;  
-    }  
+      setLoading(false);
+    })();
+  }, [navigate]);
 
-    const portfolioFiltered = portfolio.filter(link => link.trim() !== '');  
-    if (portfolioFiltered.length > 3) {  
-      setErrorMsg('Máximo 3 enlaces en portafolio.');  
-      return;  
-    }  
+  const initials = (() => {
+    const base =
+      (profileRow?.full_name ||
+        `${profileRow?.name || ""} ${profileRow?.lastname || ""}`.trim() ||
+        "U"
+      ).trim();
+    return base
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0])
+      .join("")
+      .toUpperCase();
+  })();
 
-    setLoading(true);  
+  const onPickPhoto = () => fileRef.current?.click();
 
-    try {  
-      const photoUrl = photoFile ? await uploadPhoto(photoFile) : profile?.photo_url;  
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
 
-      const { data, error } = await supabase  
-        .from('profiles')  
-        .upsert({  
-          user_id: currentUserId,  
-          name,  
-          lastname,  
-          age: parseInt(age),  
-          skills: selectedOficios,  
-          bio,  
-          city,  
-          commune,  
-          phone,  
-          photo_url: photoUrl,  
-          portfolio: portfolioFiltered,  
-          availability  
-        }, { count: 'exact' });  
+    try {
+      const path = `avatars/${session.user.id}-${Date.now()}-${file.name}`;
+      const { error: upErr } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, cacheControl: "3600" });
 
-      if (error) throw error;  
+      if (!upErr) {
+        const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+        setPhotoUrl(data.publicUrl);
+        return;
+      }
 
-      setProfile(data[0]);  
-      alert('Perfil guardado!');  
-      if (isCreate) navigate('/home');  
-      else navigate('/profile/view');  
-    } catch (error) {  
-      setErrorMsg(error.message);  
-    } finally {  
-      setLoading(false);  
-    }  
-  };  
+      // fallback preview local si no hay bucket
+      const reader = new FileReader();
+      reader.onload = () => setPhotoUrl(String(reader.result));
+      reader.readAsDataURL(file);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => setPhotoUrl(String(reader.result));
+      reader.readAsDataURL(file);
+    }
+  };
 
-  // Skip (block publish)
-  const handleSkip = () => {  
-    setErrorMsg('Completa tu perfil para publicar trabajos.');  
-    navigate('/home');  
-  };  
+  const onSave = async (e) => {
+    e.preventDefault();
+    if (!session) return;
+    setSaving(true);
+    setErrorMsg("");
 
-  // Toggle oficio
-  const toggleOficio = (oficio) => {  
-    setSelectedOficios(prev => prev.includes(oficio) ? prev.filter(s => s !== oficio) : [...prev, oficio]);  
-  };  
+    try {
+      const payload = {
+        user_id: session.user.id,
+        photo_url: photoUrl || null,
+        name: name.trim() || null,
+        lastname: lastname.trim() || null,
+        full_name: `${(name || "").trim()} ${(lastname || "").trim()}`.trim() || null,
+        age: age ? Number(age) : null,
+        bio: bio.trim() || null,
+        city: city || null,
+        commune: commune || null,
+        phone: phone.trim() || null,
+        availability: availability.trim() || null,
+        updated_at: new Date().toISOString(),
+      };
 
-  // Portfolio handlers
-  const updatePortfolio = (index, value) => {  
-    const newPortfolio = [...portfolio];  
-    newPortfolio[index] = value;  
-    setPortfolio(newPortfolio);  
-  };  
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(payload, { onConflict: "user_id" });
 
-  const removePortfolio = (index) => {  
-    const newPortfolio = portfolio.filter((_, i) => i !== index);  
-    while (newPortfolio.length < 3) newPortfolio.push('');  
-    setPortfolio(newPortfolio);  
-  };  
+      if (error) throw error;
 
-  const addPortfolio = () => {  
-    if (portfolio.filter(link => link.trim()).length < 3) setPortfolio([...portfolio, '']);  
-  };  
+      setProfileRow({ ...profileRow, ...payload });
+      setEditMode(false);
+    } catch (err) {
+      setErrorMsg(err.message || "No se pudo guardar el perfil");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><p>Cargando...</p></div>;  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-purple-50 flex items-center justify-center">
+        <div className="bg-white rounded-3xl p-6 shadow-xl">Cargando…</div>
+      </div>
+    );
+  }
 
-  if (isView && !profile) return <div className="min-h-screen flex items-center justify-center"><p>Perfil no encontrado.</p></div>;  
+  return (
+    <div className="min-h-screen bg-purple-50 p-4 max-w-md mx-auto pt-4 pb-20">
+      <div className="bg-white rounded-3xl p-6 shadow-xl">
+        <h1 className="text-xl font-bold text-center mb-4">Mi Perfil</h1>
 
-  if (!session && !isView) return <div className="min-h-screen flex items-center justify-center"><p>Inicia sesión.</p></div>;  
+        {/* Avatar */}
+        <div className="flex flex-col items-center mb-4">
+          <div className="w-20 h-20 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xl overflow-hidden border">
+            {(editMode ? photoUrl : (profileRow?.photo_url || profileRow?.avatar_url)) ? (
+              <img
+                src={editMode ? photoUrl : (profileRow?.photo_url || profileRow?.avatar_url)}
+                alt="avatar"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span>{initials}</span>
+            )}
+          </div>
 
-  return (  
-    <div className="min-h-screen bg-purple-50 p-4 max-w-md mx-auto pt-4 pb-20">  
-      <motion.div className="bg-white rounded-3xl p-6 shadow-xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>  
-        <h1 className="text-2xl font-bold text-center mb-6">{isCreate ? 'Crea tu Perfil' : isEdit ? 'Editar Perfil' : 'Mi Perfil'}</h1>  
+          {editMode && (
+            <>
+              <button
+                type="button"
+                className="mt-2 text-sm text-purple-600 hover:underline"
+                onClick={onPickPhoto}
+              >
+                Cambiar foto (opcional)
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
+            </>
+          )}
+        </div>
 
-        {isView ? (  
-          <div className="space-y-4">  
-            <div className="text-center">  
-              <img src={profile.photo_url || '/default-avatar.png'} alt="Avatar" className="w-20 h-20 rounded-full mx-auto border-2 border-purple-200" />  
-              <h2 className="text-xl font-bold mt-2">{profile.name} {profile.lastname}</h2>  
-              <p className="text-sm text-gray-600">Edad: {profile.age} | {profile.city}, {profile.commune}</p>  
-              <p className="text-sm text-gray-600">Tel: {profile.phone}</p>  
-            </div>  
+        {errorMsg && (
+          <div className="mb-3 text-sm p-3 rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
+            {errorMsg}
+          </div>
+        )}
 
-            <div className="flex space-x-1 border-b mb-4">  
-              <button className="flex-1 pb-2 border-b-2 border-purple-600 font-semibold">Sobre mí</button>  
-              <button className="flex-1 pb-2">Reseñas</button>  
-              <button className="flex-1 pb-2">Trabajos publicados</button>  
-              <button className="flex-1 pb-2">Trabajos realizados</button>  
-            </div>  
+        {!editMode ? (
+          // ======== VISTA (solo lectura) ========
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-xl border bg-gray-50">
+                <p className="text-xs text-gray-500">Nombre</p>
+                <p className="font-semibold">{profileRow?.name || "-"}</p>
+              </div>
+              <div className="p-3 rounded-xl border bg-gray-50">
+                <p className="text-xs text-gray-500">Apellido</p>
+                <p className="font-semibold">{profileRow?.lastname || "-"}</p>
+              </div>
+            </div>
 
-            <div className="space-y-3">  
-              <p className="text-sm text-gray-700 leading-relaxed">{profile.bio}</p>  
-              <div className="flex flex-wrap gap-2">  
-                {profile.skills.map(skill => <span key={skill} className="px-2 py-1 bg-purple-100 rounded-full text-sm">{skill}</span>)}  
-              </div>  
-              <p className="text-sm text-gray-600">Disponibilidad: {profile.availability || 'No especificada'}</p>  
+            <div className="p-3 rounded-xl border bg-gray-50">
+              <p className="text-xs text-gray-500">Edad</p>
+              <p className="font-semibold">{profileRow?.age ?? "-"}</p>
+            </div>
 
-              {profile.portfolio && profile.portfolio.length > 0 && profile.portfolio.filter(link => link.trim()).length > 0 && (  
-                <div>  
-                  <h4 className="font-semibold mb-1">Portafolio:</h4>  
-                  {profile.portfolio.filter(link => link.trim()).map((link, i) => (  
-                    <a key={i} href={link} target="_blank" className="block text-purple-600 text-sm hover:underline">{link}</a>  
-                  ))}  
-                </div>  
-              )}  
-            </div>  
+            <div className="p-3 rounded-xl border bg-gray-50">
+              <p className="text-xs text-gray-500">Biografía</p>
+              <p className="font-semibold whitespace-pre-wrap">
+                {profileRow?.bio || "-"}
+              </p>
+            </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">  
-              <div className="text-center p-3 bg-gray-50 rounded-lg">  
-                <h3 className="text-lg font-bold">{jobs.length}</h3>  
-                <p className="text-sm text-gray-600">Trabajos publicados</p>  
-              </div>  
-              <div className="text-center p-3 bg-gray-50 rounded-lg">  
-                <h3 className="text-lg font-bold">4.5</h3>  
-                <p className="text-sm text-gray-600">Calificación</p>  
-              </div>  
-            </div>  
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-xl border bg-gray-50">
+                <p className="text-xs text-gray-500">Ciudad</p>
+                <p className="font-semibold">{profileRow?.city || "-"}</p>
+              </div>
+              <div className="p-3 rounded-xl border bg-gray-50">
+                <p className="text-xs text-gray-500">Comuna</p>
+                <p className="font-semibold">{profileRow?.commune || "-"}</p>
+              </div>
+            </div>
 
-            <div className="space-y-3 mb-6">  
-              <h3 className="font-semibold">Últimos trabajos publicados</h3>  
-              {jobs.length === 0 ? <p className="text-gray-600">No hay trabajos.</p> : jobs.map(job => (  
-                <motion.div key={job.id} className="p-3 bg-gray-50 rounded-lg" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>  
-                  <p className="font-medium">{job.title}</p>  
-                  <p className="text-sm text-gray-600">{job.description.substring(0, 50)}...</p>  
-                </motion.div>  
-              ))}  
-            </div>  
+            <div className="p-3 rounded-xl border bg-gray-50">
+              <p className="text-xs text-gray-500">Teléfono</p>
+              <p className="font-semibold">{profileRow?.phone || "-"}</p>
+            </div>
 
-            {isOwnProfile && <motion.button onClick={() => navigate('/profile/edit')} className="w-full bg-purple-600 text-white py-3 rounded-2xl font-semibold" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>Editar Perfil</motion.button>}  
-          </div>  
+            <div className="p-3 rounded-xl border bg-gray-50">
+              <p className="text-xs text-gray-500">Disponibilidad</p>
+              <p className="font-semibold">{profileRow?.availability || "-"}</p>
+            </div>
 
-        ) : (  
-          <form onSubmit={handleSave} className="space-y-4">  
-            <div className="text-center mb-4">  
-              <label htmlFor="photo-upload" className="cursor-pointer block">  
-                <div className="w-20 h-20 rounded-full bg-gray-200 mx-auto mb-2 flex items-center justify-center border-2 border-dashed border-gray-300">  
-                  <img src={photoFile ? URL.createObjectURL(photoFile) : (profile?.photo_url || '/default-avatar.png')} alt="Avatar" className="w-20 h-20 rounded-full object-cover" />  
-                </div>  
-                <p className="text-sm text-purple-600">Cambiar foto (opcional)</p>  
-              </label>  
-              <input id="photo-upload" type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])} className="hidden" />  
-            </div>  
+            <button
+              type="button"
+              onClick={() => setEditMode(true)}
+              className="w-full py-3 rounded-xl bg-purple-600 text-white font-semibold"
+            >
+              Editar
+            </button>
+          </div>
+        ) : (
+          // ======== EDICIÓN ========
+          <form onSubmit={onSave} className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nombre"
+                className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+              />
+              <input
+                value={lastname}
+                onChange={(e) => setLastname(e.target.value)}
+                placeholder="Apellido"
+                className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+              />
+            </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">  
-              <input type="text" placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} className="p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 w-full" required />  
-              <input type="text" placeholder="Apellido" value={lastname} onChange={(e) => setLastname(e.target.value)} className="p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 w-full" required />  
-            </div>  
+            <input
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              placeholder="Edad (18+)"
+              type="number"
+              min="18"
+              className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+            />
 
-            <input type="number" placeholder="Edad (18+)" value={age} onChange={(e) => setAge(e.target.value)} min={18} max={100} className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500" required />  
+            <div>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value.slice(0, 300))}
+                rows={4}
+                placeholder="Biografía (máx. 300 caracteres)"
+                className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+              />
+              <div className="text-right text-xs text-gray-500">
+                {bio.length}/300
+              </div>
+            </div>
 
-            <div>  
-              <label className="block text-sm font-medium mb-1">Oficios (selecciona al menos 1)</label>  
-              <div className="grid grid-cols-2 gap-2 p-2 bg-gray-50 rounded-lg">  
-                {oficios.map(oficio => (  
-                  <button key={oficio} type="button" onClick={() => toggleOficio(oficio)} className={`p-2 rounded-lg border ${selectedOficios.includes(oficio) ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-300 bg-white'}`}>  
-                    {selectedOficios.includes(oficio) ? '✓' : '○'} {oficio}  
-                  </button>  
-                ))}  
-              </div>  
-              {selectedOficios.length === 0 && <p className="text-red-500 text-sm mt-1">Selecciona al menos 1 oficio.</p>}  
-            </div>  
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+              >
+                <option value="">Ciudad</option>
+                {CITIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
 
-            <div>  
-              <label className="block text-sm font-medium mb-1">Biografía (max 300 chars)</label>  
-              <textarea placeholder="Breve biografía sobre ti y tu experiencia..." value={bio} onChange={(e) => setBio(e.target.value)} rows={3} maxLength={300} className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500" required />  
-              <p className="text-sm text-gray-500 text-right">{bioCount}/300</p>  
-            </div>  
+              <select
+                value={commune}
+                onChange={(e) => setCommune(e.target.value)}
+                className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+              >
+                <option value="">Comuna</option>
+                {COMMUNES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
 
-            <div className="grid grid-cols-2 gap-4">  
-              <select value={city} onChange={(e) => setCity(e.target.value)} className="p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500" required>  
-                <option value="">Ciudad RM</option>  
-                {ciudades.map(c => <option key={c} value={c}>{c}</option>)}  
-              </select>  
-              <select value={commune} onChange={(e) => setCommune(e.target.value)} className="p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500" required>  
-                <option value="">Comuna</option>  
-                {comunas.map(c => <option key={c} value={c}>{c}</option>)}  
-              </select>  
-            </div>  
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Teléfono (+56 9 12345678)"
+              className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+            />
 
-            <input type="tel" placeholder="Teléfono/WhatsApp (+56 9 1234 5678)" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500" required pattern="^\+56\s?9\s?\d{8}$" title="Formato +56 9 1234 5678" />  
+            <input
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value)}
+              placeholder="Disponibilidad (opcional)"
+              className="w-full p-3 rounded-xl border border-purple-200 focus:ring-2 focus:ring-purple-300"
+            />
 
-            <details className="border rounded-xl p-3">  
-              <summary className="cursor-pointer font-medium mb-2">Disponibilidad (opcional)</summary>  
-              <textarea placeholder="Ej. Lunes a Viernes 9-18h" value={availability} onChange={(e) => setAvailability(e.target.value)} rows={2} className="w-full p-3 rounded-xl border border-gray-200" />  
-            </details>  
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  // deshacer cambios
+                  setEditMode(false);
+                  setPhotoUrl(profileRow?.photo_url || profileRow?.avatar_url || "");
+                  setName(profileRow?.name || "");
+                  setLastname(profileRow?.lastname || "");
+                  setAge(profileRow?.age ? String(profileRow?.age) : "");
+                  setBio(profileRow?.bio || "");
+                  setCity(profileRow?.city || "");
+                  setCommune(profileRow?.commune || "");
+                  setPhone(profileRow?.phone || "");
+                  setAvailability(profileRow?.availability || "");
+                }}
+                className="py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="py-3 rounded-xl bg-purple-600 text-white font-semibold disabled:bg-gray-300"
+              >
+                {saving ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
 
-            <details className="border rounded-xl p-3">  
-              <summary className="cursor-pointer font-medium mb-2">Portafolio (máx 3 enlaces, opcional)</summary>  
-              {portfolio.map((link, index) => {  
-                if (link.trim() === '') return null;  
-                return (  
-                  <div key={index} className="flex gap-2 mb-2">  
-                    <input type="url" placeholder="Enlace" value={link} onChange={(e) => updatePortfolio(index, e.target.value)} className="flex-1 p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-purple-500" />  
-                    <button type="button" onClick={() => removePortfolio(index)} className="px-3 py-2 bg-red-500 text-white rounded-lg">X</button>  
-                  </div>  
-                );  
-              })}  
-              {portfolio.filter(link => link.trim()).length < 3 && <button type="button" onClick={addPortfolio} className="text-purple-600 font-medium">+ Agregar enlace</button>}  
-            </details>  
-
-            {errorMsg && <p className="text-red-500 text-sm p-3 bg-red-50 rounded-xl">{errorMsg}</p>}  
-
-            <motion.button type="submit" disabled={loading || !validationOK()} className={`w-full py-3 rounded-2xl font-semibold disabled:opacity-50 ${validationOK() ? 'bg-purple-600 text-white' : 'bg-gray-300'}`} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>  
-              {loading ? 'Guardando...' : 'Guardar Perfil'}  
-            </motion.button>  
-
-            {isCreate && <button type="button" onClick={handleSkip} className="w-full py-3 bg-gray-300 rounded-2xl font-semibold">Más tarde</button>}  
-          </form>  
-
-        )}  
-      </motion.div>  
-      <BottomNav />  
-    </div>  
-  );  
-
-  const validationOK = () => name && lastname && age >= 18 && selectedOficios.length > 0 && bio && bio.length <= 300 && city && commune && phone.match(/^\+56\s?9\s?\d{8}$/);  
-
-  const toggleOficio = (oficio) => {  
-    setSelectedOficios(prev => prev.includes(oficio) ? prev.filter(s => s !== oficio) : [...prev, oficio]);  
-  };  
-
-  const updatePortfolio = (index, value) => {  
-    const newPortfolio = [...portfolio];  
-    newPortfolio[index] = value;  
-    setPortfolio(newPortfolio);  
-  };  
-
-  const removePortfolio = (index) => {  
-    const newPortfolio = portfolio.filter((_, i) => i !== index);  
-    while (newPortfolio.length < 3) newPortfolio.push('');  
-    setPortfolio(newPortfolio);  
-  };  
-
-  const addPortfolio = () => {  
-    if (portfolio.filter(l => l.trim()).length < 3) setPortfolio([...portfolio, '']);  
-  };  
-
-  const handleSkip = () => {  
-    navigate('/home');  
-  };  
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><p>Cargando perfil...</p></div>;  
-
-  return (  
-    <div className="min-h-screen bg-purple-50 p-4 max-w-md mx-auto pt-4 pb-20">  
-      <motion.div className="bg-white rounded-3xl p-6 shadow-xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>  
-        <h1 className="text-2xl font-bold text-center mb-6">Mi Perfil</h1>  
-        <div className="space-y-4">  
-          <div className="text-center mb-4">  
-            <img src={profile?.photo_url || '/default-avatar.png'} alt="Avatar" className="w-20 h-20 rounded-full mx-auto border-2 border-purple-200" />  
-            <h2 className="text-xl font-bold mt-2">{profile?.name} {profile?.lastname}</h2>  
-            <p className="text-sm text-gray-600">Edad: {profile?.age} | {profile?.city}, {profile?.commune}</p>  
-            <p className="text-sm text-gray-600">Tel: {profile?.phone}</p>  
-          </div>  
-
-          <div className="flex space-x-1 border-b mb-4">  
-            <button className="flex-1 pb-2 border-b-2 border-purple-600 font-semibold">Sobre mí</button>  
-            <button className="flex-1 pb-2">Reseñas</button>  
-            <button className="flex-1 pb-2">Trabajos publicados</button>  
-            <button className="flex-1 pb-2">Trabajos realizados</button>  
-          </div>  
-
-          <div className="space-y-3">  
-            <p className="text-sm text-gray-700">{profile?.bio}</p>  
-            <div className="flex flex-wrap gap-2">  
-              {profile?.skills?.map(skill => <span key={skill} className="px-2 py-1 bg-purple-100 rounded-full text-sm">{skill}</span>)}  
-            </div>  
-            <p className="text-sm text-gray-600">Disponibilidad: {profile?.availability || 'No especificada'}</p>  
-
-            {profile?.portfolio && profile.portfolio.length > 0 && (  
-              <div>  
-                <h4 className="font-semibold mb-1">Portafolio:</h4>  
-                {profile.portfolio.filter(link => link.trim()).map((link, i) => <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-purple-600 text-sm hover:underline mb-1">{link}</a>)}  
-              </div>  
-            )}  
-          </div>  
-
-          <div className="grid grid-cols-2 gap-4 mb-4">  
-            <div className="text-center p-3 bg-gray-50 rounded-lg">  
-              <h3 className="text-lg font-bold">{jobs.length}</h3>  
-              <p className="text-sm text-gray-600">Trabajos publicados</p>  
-            </div>  
-            <div className="text-center p-3 bg-gray-50 rounded-lg">  
-              <h3 className="text-lg font-bold">4.5</h3>  
-              <p className="text-sm text-gray-600">Calificación promedio</p>  
-            </div>  
-          </div>  
-
-          <div className="space-y-3 mb-6">  
-            <h3 className="font-semibold">Últimos trabajos publicados</h3>  
-            {jobs.length === 0 ? <p className="text-gray-600">No hay trabajos.</p> : jobs.map(job => (  
-              <div key={job.id} className="p-3 bg-gray-50 rounded-lg mb-2">  
-                <p className="font-medium">{job.title}</p>  
-                <p className="text-sm text-gray-600">{job.description.substring(0, 50)}...</p>  
-              </div>  
-            ))}  
-          </div>  
-
-          <motion.button onClick={() => navigate('/profile/edit')} className="w-full bg-purple-600 text-white py-3 rounded-2xl font-semibold" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>Editar Perfil</motion.button>  
-        </div>  
-      </motion.div>  
-      <BottomNav />  
-    </div>  
-  );  
-};  
-
-export default Profile;
+      <BottomNav />
+    </div>
+  );
+}
