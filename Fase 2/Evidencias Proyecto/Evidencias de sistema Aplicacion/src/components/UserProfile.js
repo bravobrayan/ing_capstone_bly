@@ -1,113 +1,111 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
-import { useNavigate } from 'react-router-dom';
-import { User, MapPin, LogOut } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, MapPin, User } from "lucide-react";
+import { supabase } from "../supabaseClient";
 
-const UserProfile = () => {
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function UserProfile() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        console.error(userError);
-        navigate('/login');
-        return;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("full_name,bio,city,commune,skills")
+          .eq("user_id", session.user.id)
+          .single();
+
+        if (error) throw error;
+        setProfile(data || null);
+      } catch (e) {
+        setErrorMsg(e.message || "No se pudo cargar el perfil.");
+      } finally {
+        setLoading(false);
       }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) {
-        console.error('Error cargando perfil:', error);
-      } else {
-        setProfile(data);
-      }
-      setLoading(false);
-    };
-
-    fetchProfile();
+    })();
   }, [navigate]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-600">
-        Cargando perfil...
-      </div>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-gray-600">
-        <p>No se encontró el perfil.</p>
-        <button
-          onClick={() => navigate('/create-profile')}
-          className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg"
-        >
-          Crear Perfil
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-purple-50 p-6">
-      <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md mx-auto mt-10">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Mi Perfil</h1>
-          <button onClick={handleLogout} title="Cerrar sesión">
-            <LogOut className="w-6 h-6 text-gray-600 hover:text-purple-600" />
+    <div className="min-h-screen bg-purple-50 max-w-md mx-auto pb-20">
+      {/* Header con flecha para volver al Home */}
+      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-purple-100">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button
+            onClick={() => navigate("/home")}
+            className="p-2 rounded-full hover:bg-purple-100 text-purple-600"
+            aria-label="Volver"
+          >
+            <ArrowLeft className="w-6 h-6" />
           </button>
+          <h1 className="text-lg font-bold text-gray-900">Mi Perfil</h1>
         </div>
+      </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <User className="w-5 h-5 text-purple-600" />
-            <p className="text-lg font-semibold">{profile.full_name || 'Sin nombre'}</p>
-          </div>
+      <div className="p-4">
+        <div className="bg-white rounded-3xl p-6 shadow-xl">
+          {loading && <p className="text-gray-500">Cargando…</p>}
+          {errorMsg && <p className="text-red-600">{errorMsg}</p>}
 
-          {profile.bio && (
-            <p className="text-gray-700 italic">“{profile.bio}”</p>
-          )}
+          {!loading && !errorMsg && (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-semibold">
+                  {(profile?.full_name || "A")
+                    .split(" ")
+                    .map((s) => s[0])
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 text-gray-900 font-semibold">
+                    <User className="w-4 h-4 text-purple-600" />
+                    <span>{profile?.full_name || "—"}</span>
+                  </div>
+                  {profile?.bio && (
+                    <p className="text-gray-600 text-sm mt-1">“{profile.bio}”</p>
+                  )}
+                </div>
+              </div>
 
-          <div className="flex items-center gap-2 text-gray-700">
-            <MapPin className="w-5 h-5 text-purple-600" />
-            <p>
-              {profile.city ? `${profile.city}` : 'Ciudad no especificada'}
-              {profile.commune ? `, ${profile.commune}` : ''}
-            </p>
-          </div>
+              <div className="mt-4 flex items-center gap-2 text-gray-700">
+                <MapPin className="w-4 h-4 text-purple-600" />
+                <span>
+                  {profile?.city || "—"}
+                  {profile?.commune ? `, ${profile.commune}` : ""}
+                </span>
+              </div>
 
-          {profile.skills?.length > 0 && (
-            <div>
-              <p className="font-semibold text-gray-800 mb-2">Habilidades:</p>
-              <ul className="flex flex-wrap gap-2">
-                {profile.skills.map((skill, idx) => (
-                  <li
-                    key={idx}
-                    className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm"
-                  >
-                    {skill}
-                  </li>
-                ))}
-              </ul>
-            </div>
+              {/* Habilidades */}
+              {Array.isArray(profile?.skills) && profile.skills.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-gray-800 font-medium mb-2">Habilidades:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.skills.map((s, i) => (
+                      <span
+                        key={`${s}-${i}`}
+                        className="px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-sm border border-purple-100"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
     </div>
   );
-};
-
-export default UserProfile;
+}
